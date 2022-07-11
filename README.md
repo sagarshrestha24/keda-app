@@ -87,6 +87,20 @@ Let’s verify the deployment of rabbitMq cluster.
 ``` kubectl get all -l app.kubernetes.io/part-of=rabbitmq ```
 
 
+To login to the RabbitMQ we will do port forward 
+
+``` kubectl port-forward service/rabbitmq-keda-cluster 15672 ```
+
+Now try to access the Management console with below address and login with ‘guest/guest’.
+
+http://localhost:15672
+
+![image](https://user-images.githubusercontent.com/76894861/178247021-cbe3dc98-521b-4c22-a047-fbc9ea9468e7.png)
+
+Now create a queue ‘kedaQ’ from the console. You can give any name of the queue.
+
+![image](https://user-images.githubusercontent.com/76894861/178247213-07fc8cdd-fb01-4bc7-b1b0-a7ea51fec3e7.png)
+
 
 
 
