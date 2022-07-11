@@ -102,5 +102,170 @@ Now create a queue ‘kedaQ’ from the console. You can give any name of the qu
 ![image](https://user-images.githubusercontent.com/76894861/178247213-07fc8cdd-fb01-4bc7-b1b0-a7ea51fec3e7.png)
 
 
+## Deploy SpringBoot Sender Application
+
+```
+git clone https://github.com/koushikmgithub/springboot-rmq-sender.git
+
+mvn clean install
+
+docker build -t username/springboot-rmq-sender:1.0 .
+
+docker push username/springboot-rmq-sender:1.0
+
+kubectl apply -f kubernetes/app-deployment.yaml
+
+```
+
+Now verify the application deployment by using below command.
+
+``` kubectl get pods ```
+
+![image](https://user-images.githubusercontent.com/76894861/178249681-de852c4f-e47f-44cb-a78c-34df2862b371.png)
+
+
+Once the pod is up and running, let’s access the application’s endpoint and publish some messages to queue.
+
+
+``` kubectl port-forward svc/springboot-rmq-sender-service 9095 ```
+
+
+After port forwarding, you can access the application locally. For accessing the endpoint, I have used postman.
+
+
+Sending some sample messages to RMQ. You can verify the message in ‘kedaQ’ from RabbitMQ console.
+
+![image](https://user-images.githubusercontent.com/76894861/178251973-b485910b-2218-470a-ac19-38f827e28c22.png)
+
+
+## Deploy SpringBoot Receiver Application
+
+Now let’s deploy the receiver application. The receiver application is listening to the ‘kedaQ’ and store all the messages to H2 DB. It’s also exposed an endpoint by which you can fetch all the messages from DB itself.
+
+```
+git clone https://github.com/koushikmgithub/springboot-rmq-receiver.git
+
+mvn clean install
+
+docker build -t username/springboot-rmq-receiver:1.0 .
+
+docker push username/springboot-rmq-receiver:1.0
+
+kubectl apply -f kubernetes/app-deployment.yaml
+
+```
+
+Now verify the application deployment by using the below command.
+
+``` kubectl get pods ```
+
+![image](https://user-images.githubusercontent.com/76894861/178252442-312b9756-9ec2-4811-8530-3585c54b6743.png)
+
+
+Do the port forward for accessing the application’s endpoint locally.
+
+
+``` kubectl port-forward svc/springboot-rmq-receiver-service 9096 ```
+
+
+Use the postman and access the /receiveMessage endpoint
+
+
+![image](https://user-images.githubusercontent.com/76894861/178252979-2bac1f32-9517-43c3-b3d5-5e6c9a3cf1c0.png)
+
+For Load Testing we used seige tools for load testing 
+
+To install seige use this command 
+
+``` 
+sudo apt update -y
+
+sudo apt install siege -y
+
+```
+
+Once siege is installed successfully, let’s open a terminal and execute the below command.
+
+
+``` siege -d1 -c10 "http://localhost:9095/sender/sendMessage?msg=Sending Hello Message to RMQ" ```
+
+Here we have create a ScaledObject which is the custom resource definition, where you can define the source of metrics, as well as autoscaling criteria.
+
+
+``` 
+‘app-deployment-keda.yaml’
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keda-rabbitmq-secret
+data:
+  host: YW1xcDovL2d1ZXN0Omd1ZXN0QHJhYmJpdG1xLWtlZGEtY2x1c3Rlci5kZWZhdWx0LnN2Yy5jbHVzdGVyLmxvY2FsOjU2NzI=  # base64 encoded value of format amqp://guest:password@localhost:5672/vhost
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: keda-trigger-auth-rabbitmq-conn
+  namespace: default
+spec:
+  secretTargetRef:
+    - parameter: host
+      name: keda-rabbitmq-secret
+      key: host
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: rabbitmq-scaledobject
+  namespace: default
+spec:
+  scaleTargetRef:
+    name: springboot-rmq-receiver-deployment
+  pollingInterval: 20 # Optional. Default: 30 seconds
+  cooldownPeriod: 120 # Optional. Default: 300 seconds
+  maxReplicaCount: 20 # Optional. Default: 100  
+  triggers:
+  - type: rabbitmq
+    metadata:
+      protocol: amqp
+      queueName: kedaQ #queue name
+      mode: QueueLength
+      value: "5"      
+    authenticationRef:
+      name: keda-trigger-auth-rabbitmq-conn
+      
+```
+
+Note: host is base64 encode of : amqp://guest:guest@rabbitmq-keda-cluster.default.svc.cluster.local:5672
+
+Lets Apply the abone configuration file
+
+``` kubectl apply -f app-deployment-keda.yaml ```
+
+
+Once the file is applied successfully, the KEDA will start the action. Incase there is no message in the queue, the receiver application will be terminated automatically.
+
+Let’s send some high load again to the queue and see the actions.
+
+
+``` siege -d1 -c10 ‘http://localhost:9095/sender/sendMessage?msg=Sending Hello Message to RMQ’ ```
+
+![image](https://user-images.githubusercontent.com/76894861/178254611-eee51c12-0314-4d6e-ac10-c7f65228760b.png)
+
+
+This time we have sent 89 transactions/ messages to the kedaQ and let’s see how KEDA is working in the backend. 
+
+![image](https://user-images.githubusercontent.com/76894861/178255416-d63c7b7a-4145-4799-a21b-149b3b5d2f71.png)
+
+
+After sometimes, there is no message/events in ‘kedaQ’ since it is already consumed by receiver apps , so the KEDA deactivates Kubernetes deployments (here Receiver App Deployment ) to scale to zero. If you check the pods for receiver apps , you can find it is in terminating state.
+
+
+![image](https://user-images.githubusercontent.com/76894861/178256094-8f81b254-5bef-4079-bf1a-27ea062f55ac.png)
+
+
+
+
+
 
 
