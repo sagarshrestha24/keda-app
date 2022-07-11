@@ -260,9 +260,10 @@ This time we have sent 89 transactions/ messages to the kedaQ and let’s see ho
 
 After sometimes, there is no message/events in ‘kedaQ’ since it is already consumed by receiver apps , so the KEDA deactivates Kubernetes deployments (here Receiver App Deployment ) to scale to zero. If you check the pods for receiver apps , you can find it is in terminating state.
 
+And finally there is no receiver pods.
+
 
 ![image](https://user-images.githubusercontent.com/76894861/178256094-8f81b254-5bef-4079-bf1a-27ea062f55ac.png)
-
 
 
 
